@@ -21,8 +21,8 @@
     <link rel="stylesheet" href="css/prose.css">
     <link rel="stylesheet" href="css/utility.css">
 
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
+    <!-- JavaScript Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js" defer></script>
 </head>
 
 <body x-data="serviceManager">
@@ -208,96 +208,170 @@
         <div class="tooltip__arrow"></div>
     </div>
 
-    <!-- Alpine.js Component Logic -->
-    <script>
+    <!-- Inline Main Script with Module Imports -->
+    <script type="module">
+        import { scanWorkspace } from './js/modules/api.js';
+        import { createTooltipHandlers, createPanelResizeHandlers, createFormNavigationHandlers } from './js/modules/ui.js';
+        import { renderParams, renderMarkdown } from './js/modules/render.js';
+
         document.addEventListener('alpine:init', () => {
-            Alpine.data('serviceManager', () => ({
-                // --- STATE --- //
-                services: [],
-                activeId: null,
-                nextId: 1,
-                leftWidth: 50,
-                leftPanelCollapsed: false,
-                rightPanelCollapsed: false,
-                tooltip: { open: false, text: '', top: 0, left: 0 },
-                draggingId: null,
-                dropTargetId: null,
-                dynamicData: { hosts: {} },
-                isLoading: true,
-                
-                // --- INITIALIZATION --- //
-                async init() {
-                    this.isLoading = true;
-                    try {
-                        const response = await fetch('/scan');
-                        if (!response.ok) throw new Error(`Scan failed: ${response.statusText}`);
-                        this.dynamicData = await response.json();
-                        this.addService();
-                    } catch (error) {
-                        console.error("Failed to load dynamic data from server:", error);
-                        alert("Error: Could not scan ROS2 workspace. See console for details.");
-                    } finally {
-                        this.isLoading = false;
-                    }
-                },
-                
-                // --- DRAG AND DROP, CORE METHODS, UI HANDLERS --- //
-                handleDragStart(event, id) { this.draggingId = id; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', id); },
-                handleDragOver(targetId) { if (targetId !== this.draggingId) { this.dropTargetId = targetId; } },
-                handleDrop(targetId) { if (this.draggingId === null || this.draggingId === targetId) { this.handleDragEnd(); return; } const oldIndex = this.services.findIndex(s => s.id === this.draggingId); const newIndex = this.services.findIndex(s => s.id === targetId); if (oldIndex !== -1 && newIndex !== -1) { const movedItem = this.services.splice(oldIndex, 1)[0]; this.services.splice(newIndex, 0, movedItem); this.activeId = this.draggingId; } this.handleDragEnd(); },
-                handleDragEnd() { this.draggingId = null; this.dropTargetId = null; },
-                addService() { if (this.services.length >= 10) return; const id = this.nextId++; this.services.push({ id, host: null, package: null, key: null, view: 'inputs' }); this.activeId = id; },
-                removeService(id) { this.services = this.services.filter(s => s.id !== id); if (this.activeId === id && this.services.length) { this.activeId = this.services.at(-1).id; } else if (!this.services.length) { this.addService(); } },
-                selectHost(id, host) { this.services.find(s => s.id === id).host = host; },
-                selectPackage(id, pkg) { this.services.find(s => s.id === id).package = pkg; },
-                selectService(id, key) { this.services.find(s => s.id === id).key = key; },
-                handleBackClick(service) { if (service.view === 'help') service.view = 'inputs'; else if (service.key) service.key = null; else if (service.package) service.package = null; else if (service.host) service.host = null; },
-                getBackText(service) { if (service.view === 'help') return 'Back'; if (service.key) return 'Service List'; if (service.package) return 'Package List'; if (service.host) return 'Host List'; return ''; },
-                getSelectionTitle(service) { if (!service.package) { return this.dynamicData.hosts[service.host]?.package_select_label || 'Select Package'; } return this.dynamicData.hosts[service.host]?.service_select_label || 'Select Service'; },
-                renderParams(params) {
-                    const createInputHtml = (p) => {
-                        if (p.type === 'bool') {
-                            return `<input type="checkbox" class="form-input form-input--checkbox">`;
+
+            Alpine.data('serviceManager', () => {
+
+                const tooltip = createTooltipHandlers();
+                const panelResizer = createPanelResizeHandlers();
+                const formNavigator = createFormNavigationHandlers();
+
+                return {
+                    //
+                    // Component State
+                    // Manages the dynamic data and UI status for the entire application.
+                    //
+                    services: [],
+                    dynamicData: { hosts: {} },
+                    activeId: null,
+                    nextId: 1,
+                    isLoading: true,
+                    
+                    // UI State
+                    leftWidth: 50,
+                    leftPanelCollapsed: false,
+                    rightPanelCollapsed: false,
+                    
+                    // Drag & Drop State
+                    draggingId: null,
+                    dropTargetId: null,
+
+                    // Inherited State from Modules
+                    ...tooltip.state,
+
+                    //
+                    // Initialization
+                    // Fetches initial workspace data and sets up the first tab.
+                    //
+                    async init() {
+                        this.isLoading = true;
+                        try {
+                            this.dynamicData = await scanWorkspace();
+                            this.addService();
+                        } catch (error) {
+                            console.error("Failed to load dynamic data from server:", error);
+                            alert("Error: Could not scan ROS2 workspace. See console for details.");
+                        } finally {
+                            this.isLoading = false;
                         }
-                        const inputType = p.type.includes('int') || p.type.includes('float') ? 'number' : 'text';
-                        const step = p.type.includes('int') ? 'step="1"' : p.type.includes('float') ? 'step="0.01"' : '';
-                        const numberFilterAttr = inputType === 'number' ? `onkeydown="return !['e', 'E', '+'].includes(event.key)"` : '';
-                        return `<input type="${inputType}" ${step} ${numberFilterAttr} class="form-input" @keydown.enter.prevent="navigateDown($event)" @keydown.backspace="navigateUpOnEmpty($event)" @keydown.delete="navigateUpOnEmpty($event)">`;
-                    };
-                    const render = (params) => params.map(p => {
-                        if (p.children || p.members) {
-                            return `<details open class="param-group">
-                                        <summary class="param-group__summary">
-                                            <div class="param-group__labels">
-                                                <span class="param__name">${p.name}</span>
-                                                <span class="param__type">${p.type}</span>
-                                            </div>
-                                            <svg class="param-group__chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-                                        </summary>
-                                        <div class="param-group__children">${render(p.children || p.members)}</div>
-                                    </details>`;
+                    },
+
+                    //
+                    // Service & Tab Management
+                    // Core logic for adding, removing, and selecting services.
+                    //
+                    addService() {
+                        if (this.services.length >= 10) return;
+                        const id = this.nextId++;
+                        this.services.push({ id, host: null, package: null, key: null, view: 'inputs' });
+                        this.activeId = id;
+                    },
+
+                    removeService(id) {
+                        this.services = this.services.filter(s => s.id !== id);
+                        if (this.activeId === id && this.services.length) {
+                            this.activeId = this.services.at(-1).id;
+                        } else if (!this.services.length) {
+                            this.addService();
                         }
-                        return `<div class="param-row" @click="handleInputRowClick($event)">
-                                    <div class="param-row__labels">
-                                        <span class="param__name">${p.name}</span>
-                                        <span class="param__type">${p.type}</span>
-                                    </div>
-                                    ${createInputHtml(p)}
-                                </div>`;
-                    }).join('');
-                    return render(params);
-                },
-                renderMarkdown(md) { return marked.parse(md); },
-                handleInputRowClick(event) { if (event.target.tagName === 'INPUT') return; const input = event.currentTarget.querySelector('input'); if (!input) return; input.type === 'checkbox' ? (input.checked = !input.checked) : input.focus(); },
-                getAllInputs() { return [...this.$root.querySelectorAll('div[x-show="service.id === activeId"] input:not([type=checkbox])')]; },
-                navigateDown(event) { const allInputs = this.getAllInputs(); const currentIndex = allInputs.indexOf(event.target); if (currentIndex > -1 && currentIndex < allInputs.length - 1) { allInputs[currentIndex + 1].focus(); } },
-                navigateUpOnEmpty(event) { if (event.target.value !== '') return; event.preventDefault(); const allInputs = this.getAllInputs(); const currentIndex = allInputs.indexOf(event.target); if (currentIndex > 0) { const prevInput = allInputs[currentIndex - 1]; prevInput.focus(); prevInput.setSelectionRange(prevInput.value.length, prevInput.value.length); } },
-                startResize(e) { e.preventDefault(); const container = this.$refs.container; document.body.classList.add('is-resizing'); e.target.closest('.resize-handle').classList.add('is-active'); const move = (e) => { const containerRect = container.getBoundingClientRect(); const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100; this.leftWidth = Math.max(20, Math.min(80, newWidth)); }; const end = () => { document.body.classList.remove('is-resizing'); document.querySelector('.resize-handle.is-active')?.classList.remove('is-active'); document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', end); }; document.addEventListener('mousemove', move); document.addEventListener('mouseup', end); },
-                resetSplit() { this.leftWidth = 50; },
-                showTooltip(text, el) { if (!text) return; const rect = el.getBoundingClientRect(); let top = rect.top - 6; let left = rect.left + rect.width / 2; this.tooltip = { text, open: true, top, left }; },
-                hideTooltip() { this.tooltip.open = false; }
-            }));
+                    },
+
+                    selectHost(id, host) { 
+                        const service = this.services.find(s => s.id === id);
+                        if (service) service.host = host;
+                    },
+                    
+                    selectPackage(id, pkg) { 
+                        const service = this.services.find(s => s.id === id);
+                        if (service) service.package = pkg;
+                    },
+                    
+                    selectService(id, key) { 
+                        const service = this.services.find(s => s.id === id);
+                        if (service) service.key = key;
+                    },
+
+                    //
+                    // Event Handlers: Drag & Drop
+                    // Manages the user interaction for reordering tabs.
+                    //
+                    handleDragStart(event, id) {
+                        this.draggingId = id;
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', id);
+                    },
+
+                    handleDragOver(targetId) {
+                        if (targetId !== this.draggingId) {
+                            this.dropTargetId = targetId;
+                        }
+                    },
+
+                    handleDrop(targetId) {
+                        if (this.draggingId === null || this.draggingId === targetId) {
+                            this.handleDragEnd();
+                            return;
+                        }
+                        const oldIndex = this.services.findIndex(s => s.id === this.draggingId);
+                        const newIndex = this.services.findIndex(s => s.id === targetId);
+                        if (oldIndex !== -1 && newIndex !== -1) {
+                            const movedItem = this.services.splice(oldIndex, 1)[0];
+                            this.services.splice(newIndex, 0, movedItem);
+                            this.activeId = this.draggingId;
+                        }
+                        this.handleDragEnd();
+                    },
+
+                    handleDragEnd() {
+                        this.draggingId = null;
+                        this.dropTargetId = null;
+                    },
+
+                    //
+                    // UI Logic & Content Getters
+                    // Methods that compute text or handle navigation state.
+                    //
+                    handleBackClick(service) {
+                        if (service.view === 'help') service.view = 'inputs';
+                        else if (service.key) service.key = null;
+                        else if (service.package) service.package = null;
+                        else if (service.host) service.host = null;
+                    },
+
+                    getBackText(service) {
+                        if (service.view === 'help') return 'Back';
+                        if (service.key) return 'Service List';
+                        if (service.package) return 'Package List';
+                        if (service.host) return 'Host List';
+                        return '';
+                    },
+
+                    getSelectionTitle(service) {
+                        if (!service.package) {
+                            return this.dynamicData.hosts[service.host]?.package_select_label || 'Select Package';
+                        }
+                        return this.dynamicData.hosts[service.host]?.service_select_label || 'Select Service';
+                    },
+
+                    //
+                    // External Modules
+                    // Delegates complex UI, rendering, and navigation tasks.
+                    //
+                    ...tooltip.methods,
+                    ...panelResizer.methods,
+                    ...formNavigator.methods,
+                    renderParams,
+                    renderMarkdown,
+                };
+            });
         });
     </script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </body>
 </html>
