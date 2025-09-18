@@ -1,0 +1,44 @@
+/* Generic button styles */
+.button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #d1d5db; /* text-gray-300 */
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s ease-in-out;
+    font-size: 0.875rem; /* 14px */
+}
+
+.button:hover {
+    color: #ffffff;
+}
+
+.button--back .button__back-arrow {
+    font-size: 1.5rem; /* 24px */
+    line-height: 1;
+    margin-top: -2px;
+}
+
+.button--info {
+    font-weight: 700;
+}
+
+.icon-info {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.button--call-service {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    background-color: #374151; /* bg-gray-700 */
+    color: #ffffff;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.button--call-service:hover {
+    background-color: #4b5563; /* hover:bg-gray-600 */
+}

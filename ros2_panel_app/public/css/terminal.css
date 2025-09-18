@@ -1,0 +1,22 @@
+/* Terminal panel styles */
+.terminal {
+    flex-grow: 1;
+    padding: 0.75rem;
+    font-family: monospace;
+    font-size: 0.75rem; /* 12px */
+    line-height: 1.6;
+    overflow-y: auto;
+}
+
+.terminal__line--prompt {
+    color: #4ade80; /* text-green-400 */
+}
+
+.terminal__cursor {
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+    from, to { color: transparent; }
+    50% { color: #4ade80; }
+}

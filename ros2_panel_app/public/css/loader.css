@@ -1,0 +1,30 @@
+/* Loading indicator styles */
+.loader-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af; /* text-gray-400 */
+}
+
+.loader {
+    display: flex;
+    align-items: center;
+}
+
+.loader__spinner {
+    animation: spin 1s linear infinite;
+    margin-right: 0.75rem;
+    height: 2rem; /* 32px */
+    width: 2rem;
+    color: #ffffff;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.loader__spinner .opacity-25 { opacity: 0.25; }
+.loader__spinner .opacity-75 { opacity: 0.75; }

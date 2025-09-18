@@ -1,0 +1,10 @@
+# Request
+example_interfaces/Objects obj
+example_interfaces/File file
+int64 a
+int64 b
+
+---
+
+# Response
+int64 sum

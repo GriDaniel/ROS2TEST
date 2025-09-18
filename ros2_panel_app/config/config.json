@@ -1,0 +1,16 @@
+[
+  {
+    "host_entry": {
+      "type": {
+        "$ref": "host_types.json#/ros2_services"
+      },
+      "package_source": {
+        "label": "My ROS2 Package",
+        "path": "../some_other_dir/ros2_scanner_system"
+      },
+      "interface_source": {
+        "path": "../some_other_dir/ros2_scanner_system/example_interfaces"
+      }
+    }
+  }
+]

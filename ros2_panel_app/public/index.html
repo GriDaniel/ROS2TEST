@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS2 Developer Panel</title>
+
+    <!-- Enterprise CSS Files -->
+    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/header.css">
+    <link rel="stylesheet" href="css/panel.css">
+    <link rel="stylesheet" href="css/tabs.css">
+    <link rel="stylesheet" href="css/button.css">
+    <link rel="stylesheet" href="css/form.css">
+    <link rel="stylesheet" href="css/terminal.css">
+    <link rel="stylesheet" href="css/tooltip.css">
+    <link rel="stylesheet" href="css/loader.css">
+    <link rel="stylesheet" href="css/resize-handle.css">
+    <link rel="stylesheet" href="css/prose.css">
+    <link rel="stylesheet" href="css/utility.css">
+
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
+</head>
+
+<body x-data="serviceManager">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="app-header__brand">
+            <h1 class="app-header__title">ROS2</h1>
+            <span class="app-header__subtitle">Developer Panel</span>
+            <span class="app-header__version">v1.0.0</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content" x-ref="container">
+        <!-- Loading Indicator -->
+        <div x-show="isLoading" x-cloak class="loader-container">
+            <div class="loader">
+                <svg class="loader__spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="loader__text">Scanning ROS2 Workspace...</span>
+            </div>
+        </div>
+        
+        <!-- UI Panels (rendered after loading) -->
+        <template x-if="!isLoading">
+            <div class="panel-container">
+                <!-- Left Panel Collapsed Indicator -->
+                <div x-show="leftPanelCollapsed" x-cloak @click="leftPanelCollapsed = false; resetSplit()" class="panel__collapsed-indicator">
+                    <svg class="icon-chevrons" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                    <svg class="icon-chevrons icon-chevrons--offset" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                </div>
+
+                <!-- Left Panel -->
+                <div x-show="!leftPanelCollapsed" class="panel panel--left" :class="{'is-full-width': rightPanelCollapsed}" :style="!rightPanelCollapsed ? `width: ${leftWidth}%` : ''">
+                    <!-- Tabs -->
+                    <div class="tabs-header">
+                        <div class="tabs-container" x-ref="tabsContainer" @dragleave.self="dropTargetId = null">
+                            <template x-for="service in services" :key="service.id">
+                                <div class="tab" :data-service-id="service.id" :class="{ 'is-active': activeId === service.id, 'is-dragging': draggingId === service.id, 'is-drag-over': dropTargetId === service.id && draggingId !== service.id }" draggable="true" @click="activeId = service.id" @dragstart="handleDragStart($event, service.id)" @dragend="handleDragEnd()" @dragover.prevent="handleDragOver(service.id)" @drop.prevent="handleDrop(service.id)">
+                                    <span class="tab__title" x-text="service.key || service.package || service.host || 'New Host'" @mouseenter="if ($el.scrollWidth > $el.clientWidth) showTooltip(service.key || service.package || service.host || 'New Host', $el)" @mouseleave="hideTooltip"></span>
+                                    <button @click.stop="removeService(service.id)" @mouseenter="showTooltip('Close Tab', $el)" @mouseleave="hideTooltip" class="tab__close-button">
+                                        <svg class="icon-close" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                        <div class="tabs-actions">
+                            <button @click="leftPanelCollapsed = true" :disabled="rightPanelCollapsed" @mouseenter="showTooltip('Collapse Panel', $el)" @mouseleave="hideTooltip" class="tabs-actions__button">
+                                <svg class="icon-collapse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+                            </button>
+                            <button @click="addService" @mouseenter="showTooltip('New Tab', $el)" @mouseleave="hideTooltip" :disabled="services.length >= 10" :class="services.length >= 10 ? 'is-disabled' : ''" class="tabs-actions__button tabs-actions__button--add">
+                                <svg class="icon-add" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Content -->
+                    <div class="panel__content">
+                        <template x-for="service in services" :key="service.id">
+                            <div x-show="service.id === activeId" class="panel__content-inner" x-cloak>
+                                <!-- HOST SELECTION -->
+                                <template x-if="!service.host">
+                                    <div class="selection-list-container">
+                                        <div class="selection-list__title">Select a Host</div>
+                                        <div class="selection-list">
+                                            <template x-for="hostLabel in Object.keys(dynamicData.hosts)" :key="hostLabel">
+                                                <button @click="selectHost(service.id, hostLabel)" class="selection-list__item">
+                                                    <span x-text="hostLabel"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- HOST-SPECIFIC CONTENT -->
+                                <template x-if="service.host">
+                                    <div class="service-container">
+                                        <div class="service-header">
+                                            <button @click="handleBackClick(service)" class="button button--back">
+                                                <span class="button__back-arrow">←</span>
+                                                <span class="button__back-text" x-text="getBackText(service)"></span>
+                                            </button>
+                                            <button x-show="service.key" @click="service.view = service.view === 'help' ? 'inputs' : 'help'" class="button button--info">
+                                                <svg class="icon-info" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4C9.243 4 7 6.243 7 9h2c0-1.654 1.346-3 3-3s3 1.346 3 3c0 1.069-.454 1.465-1.481 2.255-.382.294-.813.626-1.226 1.038C10.981 13.604 10.995 14.897 11 15v2h2v-2.009c0-.024.023-.601.707-1.284.32-.32.682-.598 1.031-.867C15.798 12.024 17 11.1 17 9c0-2.757-2.243-5-5-5zm-1 14h2v2h-2z" /></svg>
+                                                <span>Service Info</span>
+                                            </button>
+                                        </div>
+                                        <!-- SELECTION LISTS -->
+                                        <template x-if="!service.key">
+                                            <div class="selection-list-container">
+                                                <div class="selection-list__title" x-text="getSelectionTitle(service)"></div>
+                                                <div class="selection-list">
+                                                    <template x-if="!service.package">
+                                                        <template x-for="packageLabel in Object.keys(dynamicData.hosts[service.host].packages)" :key="packageLabel">
+                                                            <button @click="selectPackage(service.id, packageLabel)" class="selection-list__item">
+                                                                <span x-text="packageLabel"></span>
+                                                            </button>
+                                                        </template>
+                                                    </template>
+                                                    <template x-if="service.package">
+                                                        <template x-for="(serviceDetails, serviceKey) in dynamicData.hosts[service.host].packages[service.package]" :key="serviceKey">
+                                                            <button @click="selectService(service.id, serviceKey)" class="selection-list__item">
+                                                                <span x-text="serviceKey"></span>
+                                                            </button>
+                                                        </template>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <!-- SERVICE CONTENT -->
+                                        <template x-if="service.key">
+                                            <div class="service-content">
+                                                <div x-show="service.view === 'inputs'">
+                                                    <div class="service-content__title" x-text="service.key + ' Service'"></div>
+                                                    <div class="service-content__subheader">
+                                                        <div class="subheader__main">
+                                                            <h3 class="subheader__title">INPUTS</h3>
+                                                            <button class="button button--call-service">Call Service</button>
+                                                        </div>
+                                                        <div class="subheader__columns">
+                                                            <span>Parameter</span><span>Type</span>
+                                                        </div>
+                                                    </div>
+                                                    <div x-html="renderParams(dynamicData.hosts[service.host].packages[service.package][service.key].params)" class="service-content__params"></div>
+                                                </div>
+                                                <div x-show="service.view === 'help'" class="service-content__help">
+                                                    <div class="service-content__title" x-text="service.key + ' Documentation'"></div>
+                                                    <div class="prose" x-html="renderMarkdown(dynamicData.hosts[service.host].packages[service.package][service.key].readme)"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Resize Handle -->
+                <div x-show="!leftPanelCollapsed && !rightPanelCollapsed" @mousedown="startResize" class="resize-handle">
+                    <div class="resize-handle__header">
+                        <button @click.stop="resetSplit" @mouseenter="showTooltip('Reset Layout', $el)" @mouseleave="hideTooltip" class="resize-handle__button">
+                            <svg class="icon-reset" fill="currentColor" viewBox="0 0 36 36"><path d="M22.4,11.65a1.09,1.09,0,0,0,1.09,1.09H34.43V1.81a1.09,1.09,0,1,0-2.19,0V8.95a16.41,16.41,0,1,0,1.47,15.86,1.12,1.12,0,0,0-2.05-.9,14.18,14.18,0,1,1-1.05-13.36H23.5A1.09,1.09,0,0,0,22.4,11.65Z"></path></svg>
+                        </button>
+                    </div>
+                    <div class="resize-handle__grip-area">
+                        <div class="resize-handle__grip">
+                            <div class="resize-handle__bar"></div>
+                            <div class="resize-handle__bar"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel (Terminal) -->
+                <div x-show="!rightPanelCollapsed" class="panel panel--right" :class="{'is-full-width': leftPanelCollapsed}" :style="!leftPanelCollapsed ? `width: ${100 - leftWidth}%` : ''">
+                    <div class="panel__header">
+                        <div class="panel__header-title">Ubuntu Terminal Output</div>
+                        <button @click="rightPanelCollapsed = true" :disabled="leftPanelCollapsed" @mouseenter="showTooltip('Collapse Panel', $el)" @mouseleave="hideTooltip" class="panel__header-button">
+                            <svg class="icon-collapse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+                        </button>
+                    </div>
+                    <div class="terminal">
+                        <div class="terminal__line terminal__line--prompt">$ rosservice list</div>
+                        <div class="terminal__line">/navigation/move_robot</div>
+                        <div class="terminal__line">/perception/scan_environment</div>
+                        <div class="terminal__line">/manipulation/grasp_object</div>
+                        <div class="terminal__line terminal__line--prompt">$ <span class="terminal__cursor">_</span></div>
+                    </div>
+                </div>
+
+                <!-- Right Panel Collapsed Indicator -->
+                <div x-show="rightPanelCollapsed" x-cloak @click="rightPanelCollapsed = false; resetSplit()" class="panel__collapsed-indicator">
+                    <svg class="icon-chevrons" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                    <svg class="icon-chevrons icon-chevrons--offset" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                </div>
+            </div>
+        </template>
+    </main>
+
+    <!-- Global Tooltip -->
+    <div x-show="tooltip.open" x-cloak class="tooltip" :style="`top: ${tooltip.top}px; left: ${tooltip.left}px;`">
+        <span x-text="tooltip.text"></span>
+        <div class="tooltip__arrow"></div>
+    </div>
+
+    <!-- Alpine.js Component Logic -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('serviceManager', () => ({
+                // --- STATE --- //
+                services: [],
+                activeId: null,
+                nextId: 1,
+                leftWidth: 50,
+                leftPanelCollapsed: false,
+                rightPanelCollapsed: false,
+                tooltip: { open: false, text: '', top: 0, left: 0 },
+                draggingId: null,
+                dropTargetId: null,
+                dynamicData: { hosts: {} },
+                isLoading: true,
+                
+                // --- INITIALIZATION --- //
+                async init() {
+                    this.isLoading = true;
+                    try {
+                        const response = await fetch('/scan');
+                        if (!response.ok) throw new Error(`Scan failed: ${response.statusText}`);
+                        this.dynamicData = await response.json();
+                        this.addService();
+                    } catch (error) {
+                        console.error("Failed to load dynamic data from server:", error);
+                        alert("Error: Could not scan ROS2 workspace. See console for details.");
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+                
+                // --- DRAG AND DROP, CORE METHODS, UI HANDLERS --- //
+                handleDragStart(event, id) { this.draggingId = id; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', id); },
+                handleDragOver(targetId) { if (targetId !== this.draggingId) { this.dropTargetId = targetId; } },
+                handleDrop(targetId) { if (this.draggingId === null || this.draggingId === targetId) { this.handleDragEnd(); return; } const oldIndex = this.services.findIndex(s => s.id === this.draggingId); const newIndex = this.services.findIndex(s => s.id === targetId); if (oldIndex !== -1 && newIndex !== -1) { const movedItem = this.services.splice(oldIndex, 1)[0]; this.services.splice(newIndex, 0, movedItem); this.activeId = this.draggingId; } this.handleDragEnd(); },
+                handleDragEnd() { this.draggingId = null; this.dropTargetId = null; },
+                addService() { if (this.services.length >= 10) return; const id = this.nextId++; this.services.push({ id, host: null, package: null, key: null, view: 'inputs' }); this.activeId = id; },
+                removeService(id) { this.services = this.services.filter(s => s.id !== id); if (this.activeId === id && this.services.length) { this.activeId = this.services.at(-1).id; } else if (!this.services.length) { this.addService(); } },
+                selectHost(id, host) { this.services.find(s => s.id === id).host = host; },
+                selectPackage(id, pkg) { this.services.find(s => s.id === id).package = pkg; },
+                selectService(id, key) { this.services.find(s => s.id === id).key = key; },
+                handleBackClick(service) { if (service.view === 'help') service.view = 'inputs'; else if (service.key) service.key = null; else if (service.package) service.package = null; else if (service.host) service.host = null; },
+                getBackText(service) { if (service.view === 'help') return 'Back'; if (service.key) return 'Service List'; if (service.package) return 'Package List'; if (service.host) return 'Host List'; return ''; },
+                getSelectionTitle(service) { if (!service.package) { return this.dynamicData.hosts[service.host]?.package_select_label || 'Select Package'; } return this.dynamicData.hosts[service.host]?.service_select_label || 'Select Service'; },
+                renderParams(params) {
+                    const createInputHtml = (p) => {
+                        if (p.type === 'bool') {
+                            return `<input type="checkbox" class="form-input form-input--checkbox">`;
+                        }
+                        const inputType = p.type.includes('int') || p.type.includes('float') ? 'number' : 'text';
+                        const step = p.type.includes('int') ? 'step="1"' : p.type.includes('float') ? 'step="0.01"' : '';
+                        const numberFilterAttr = inputType === 'number' ? `onkeydown="return !['e', 'E', '+'].includes(event.key)"` : '';
+                        return `<input type="${inputType}" ${step} ${numberFilterAttr} class="form-input" @keydown.enter.prevent="navigateDown($event)" @keydown.backspace="navigateUpOnEmpty($event)" @keydown.delete="navigateUpOnEmpty($event)">`;
+                    };
+                    const render = (params) => params.map(p => {
+                        if (p.children || p.members) {
+                            return `<details open class="param-group">
+                                        <summary class="param-group__summary">
+                                            <div class="param-group__labels">
+                                                <span class="param__name">${p.name}</span>
+                                                <span class="param__type">${p.type}</span>
+                                            </div>
+                                            <svg class="param-group__chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                                        </summary>
+                                        <div class="param-group__children">${render(p.children || p.members)}</div>
+                                    </details>`;
+                        }
+                        return `<div class="param-row" @click="handleInputRowClick($event)">
+                                    <div class="param-row__labels">
+                                        <span class="param__name">${p.name}</span>
+                                        <span class="param__type">${p.type}</span>
+                                    </div>
+                                    ${createInputHtml(p)}
+                                </div>`;
+                    }).join('');
+                    return render(params);
+                },
+                renderMarkdown(md) { return marked.parse(md); },
+                handleInputRowClick(event) { if (event.target.tagName === 'INPUT') return; const input = event.currentTarget.querySelector('input'); if (!input) return; input.type === 'checkbox' ? (input.checked = !input.checked) : input.focus(); },
+                getAllInputs() { return [...this.$root.querySelectorAll('div[x-show="service.id === activeId"] input:not([type=checkbox])')]; },
+                navigateDown(event) { const allInputs = this.getAllInputs(); const currentIndex = allInputs.indexOf(event.target); if (currentIndex > -1 && currentIndex < allInputs.length - 1) { allInputs[currentIndex + 1].focus(); } },
+                navigateUpOnEmpty(event) { if (event.target.value !== '') return; event.preventDefault(); const allInputs = this.getAllInputs(); const currentIndex = allInputs.indexOf(event.target); if (currentIndex > 0) { const prevInput = allInputs[currentIndex - 1]; prevInput.focus(); prevInput.setSelectionRange(prevInput.value.length, prevInput.value.length); } },
+                startResize(e) { e.preventDefault(); const container = this.$refs.container; document.body.classList.add('is-resizing'); e.target.closest('.resize-handle').classList.add('is-active'); const move = (e) => { const containerRect = container.getBoundingClientRect(); const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100; this.leftWidth = Math.max(20, Math.min(80, newWidth)); }; const end = () => { document.body.classList.remove('is-resizing'); document.querySelector('.resize-handle.is-active')?.classList.remove('is-active'); document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', end); }; document.addEventListener('mousemove', move); document.addEventListener('mouseup', end); },
+                resetSplit() { this.leftWidth = 50; },
+                showTooltip(text, el) { if (!text) return; const rect = el.getBoundingClientRect(); let top = rect.top - 6; let left = rect.left + rect.width / 2; this.tooltip = { text, open: true, top, left }; },
+                hideTooltip() { this.tooltip.open = false; }
+            }));
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "ros2_services": {
+    "host_select_label": "ROS2 Services",
+    "package_select_label": "Select a ROS2 Package",
+    "service_select_label": "Select a Service",
+    "conventions": {
+      "interface_extensions": [".srv", ".msg"],
+      "instantiation_regex": "\\.create_service\\(\\s*(?<interfaceType>[\\w\\d_]+)\\s*,\\s*['\"](?<instanceName>[^'\"]+)['\"]",
+      "import_regex_template": "from ${packageName}\\.srv import ${interfaceType}"
+    }
+  },
+  "ros2_actions": {
+    "host_select_label": "ROS2 Actions",
+    "package_select_label": "Select a ROS2 Package",
+    "service_select_label": "Select an Action",
+    "conventions": {
+      "interface_extensions": [".action", ".msg"],
+      "instantiation_regex": "ActionClient\\(\\s*self\\s*,\\s*(?<interfaceType>[\\w\\d_]+)\\s*,\\s*['\"](?<instanceName>[^'\"]+)['\"]",
+      "import_regex_template": "from ${packageName}\\.action import ${interfaceType}"
+    }
+  }
+}

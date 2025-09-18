@@ -1,0 +1,15 @@
+/* Main application layout */
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+.main-content {
+    flex-grow: 1;
+    display: flex;
+}
+
+.panel-container {
+    flex-grow: 1;
+    display: flex;
+}

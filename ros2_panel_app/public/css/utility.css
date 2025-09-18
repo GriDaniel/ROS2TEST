@@ -1,0 +1,10 @@
+/* Utility classes for Alpine.js and global states */
+[x-cloak] {
+    display: none !important;
+}
+
+body.is-resizing,
+body.is-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
