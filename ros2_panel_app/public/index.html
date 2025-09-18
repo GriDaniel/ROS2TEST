@@ -20,9 +20,13 @@
     <link rel="stylesheet" href="css/resize-handle.css">
     <link rel="stylesheet" href="css/prose.css">
     <link rel="stylesheet" href="css/utility.css">
-
+    
+    <!-- Main Application Logic (loads as a module) -->
+    <script src="js/main.js" type="module"></script>
+    
     <!-- JavaScript Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js" defer></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
 
 <body x-data="serviceManager">
@@ -207,171 +211,5 @@
         <span x-text="tooltip.text"></span>
         <div class="tooltip__arrow"></div>
     </div>
-
-    <!-- Inline Main Script with Module Imports -->
-    <script type="module">
-        import { scanWorkspace } from './js/modules/api.js';
-        import { createTooltipHandlers, createPanelResizeHandlers, createFormNavigationHandlers } from './js/modules/ui.js';
-        import { renderParams, renderMarkdown } from './js/modules/render.js';
-
-        document.addEventListener('alpine:init', () => {
-
-            Alpine.data('serviceManager', () => {
-
-                const tooltip = createTooltipHandlers();
-                const panelResizer = createPanelResizeHandlers();
-                const formNavigator = createFormNavigationHandlers();
-
-                return {
-                    //
-                    // Component State
-                    // Manages the dynamic data and UI status for the entire application.
-                    //
-                    services: [],
-                    dynamicData: { hosts: {} },
-                    activeId: null,
-                    nextId: 1,
-                    isLoading: true,
-                    
-                    // UI State
-                    leftWidth: 50,
-                    leftPanelCollapsed: false,
-                    rightPanelCollapsed: false,
-                    
-                    // Drag & Drop State
-                    draggingId: null,
-                    dropTargetId: null,
-
-                    // Inherited State from Modules
-                    ...tooltip.state,
-
-                    //
-                    // Initialization
-                    // Fetches initial workspace data and sets up the first tab.
-                    //
-                    async init() {
-                        this.isLoading = true;
-                        try {
-                            this.dynamicData = await scanWorkspace();
-                            this.addService();
-                        } catch (error) {
-                            console.error("Failed to load dynamic data from server:", error);
-                            alert("Error: Could not scan ROS2 workspace. See console for details.");
-                        } finally {
-                            this.isLoading = false;
-                        }
-                    },
-
-                    //
-                    // Service & Tab Management
-                    // Core logic for adding, removing, and selecting services.
-                    //
-                    addService() {
-                        if (this.services.length >= 10) return;
-                        const id = this.nextId++;
-                        this.services.push({ id, host: null, package: null, key: null, view: 'inputs' });
-                        this.activeId = id;
-                    },
-
-                    removeService(id) {
-                        this.services = this.services.filter(s => s.id !== id);
-                        if (this.activeId === id && this.services.length) {
-                            this.activeId = this.services.at(-1).id;
-                        } else if (!this.services.length) {
-                            this.addService();
-                        }
-                    },
-
-                    selectHost(id, host) { 
-                        const service = this.services.find(s => s.id === id);
-                        if (service) service.host = host;
-                    },
-                    
-                    selectPackage(id, pkg) { 
-                        const service = this.services.find(s => s.id === id);
-                        if (service) service.package = pkg;
-                    },
-                    
-                    selectService(id, key) { 
-                        const service = this.services.find(s => s.id === id);
-                        if (service) service.key = key;
-                    },
-
-                    //
-                    // Event Handlers: Drag & Drop
-                    // Manages the user interaction for reordering tabs.
-                    //
-                    handleDragStart(event, id) {
-                        this.draggingId = id;
-                        event.dataTransfer.effectAllowed = 'move';
-                        event.dataTransfer.setData('text/plain', id);
-                    },
-
-                    handleDragOver(targetId) {
-                        if (targetId !== this.draggingId) {
-                            this.dropTargetId = targetId;
-                        }
-                    },
-
-                    handleDrop(targetId) {
-                        if (this.draggingId === null || this.draggingId === targetId) {
-                            this.handleDragEnd();
-                            return;
-                        }
-                        const oldIndex = this.services.findIndex(s => s.id === this.draggingId);
-                        const newIndex = this.services.findIndex(s => s.id === targetId);
-                        if (oldIndex !== -1 && newIndex !== -1) {
-                            const movedItem = this.services.splice(oldIndex, 1)[0];
-                            this.services.splice(newIndex, 0, movedItem);
-                            this.activeId = this.draggingId;
-                        }
-                        this.handleDragEnd();
-                    },
-
-                    handleDragEnd() {
-                        this.draggingId = null;
-                        this.dropTargetId = null;
-                    },
-
-                    //
-                    // UI Logic & Content Getters
-                    // Methods that compute text or handle navigation state.
-                    //
-                    handleBackClick(service) {
-                        if (service.view === 'help') service.view = 'inputs';
-                        else if (service.key) service.key = null;
-                        else if (service.package) service.package = null;
-                        else if (service.host) service.host = null;
-                    },
-
-                    getBackText(service) {
-                        if (service.view === 'help') return 'Back';
-                        if (service.key) return 'Service List';
-                        if (service.package) return 'Package List';
-                        if (service.host) return 'Host List';
-                        return '';
-                    },
-
-                    getSelectionTitle(service) {
-                        if (!service.package) {
-                            return this.dynamicData.hosts[service.host]?.package_select_label || 'Select Package';
-                        }
-                        return this.dynamicData.hosts[service.host]?.service_select_label || 'Select Service';
-                    },
-
-                    //
-                    // External Modules
-                    // Delegates complex UI, rendering, and navigation tasks.
-                    //
-                    ...tooltip.methods,
-                    ...panelResizer.methods,
-                    ...formNavigator.methods,
-                    renderParams,
-                    renderMarkdown,
-                };
-            });
-        });
-    </script>
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </body>
 </html>
